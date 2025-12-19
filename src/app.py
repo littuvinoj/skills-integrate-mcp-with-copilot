@@ -10,6 +10,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 
 from . import auth
+from . import payments
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
@@ -106,6 +107,38 @@ def root():
 @app.get("/activities")
 def get_activities():
     return activities
+
+
+# Payments / Invoices endpoints (basic in-memory implementation)
+@app.get("/invoices")
+def list_invoices(current_user: dict = Depends(auth.get_current_user)):
+    # admin or the student who owns invoices can view
+    if current_user.get("role") != "admin":
+        # filter to user's invoices
+        return [i for i in payments.list_invoices() if i["student_email"] == current_user.get("email")]
+    return payments.list_invoices()
+
+
+@app.post("/invoices")
+def create_invoice(student_email: str, amount_cents: int, due_date: str = None, current_user: dict = Depends(auth.require_role("admin"))):
+    invoice = payments.create_invoice(student_email, amount_cents, due_date)
+    return invoice
+
+
+@app.post("/invoices/{invoice_id}/payments")
+def create_payment(invoice_id: int, amount_cents: int, current_user: dict = Depends(auth.get_current_user)):
+    # Only admin or the invoice owner can pay/record payment
+    invoice = payments.get_invoice(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if current_user.get("role") != "admin" and invoice.get("student_email") != current_user.get("email"):
+        raise HTTPException(status_code=403, detail="Not permitted to pay this invoice")
+    try:
+        payment = payments.record_payment(invoice_id, amount_cents)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return payment
+
 
 
 @app.post("/activities/{activity_name}/signup")
