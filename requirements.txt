@@ -1,2 +1,6 @@
 fastapi
 uvicorn
+
+# Authentication dependencies
+python-jose[cryptography]
+passlib[bcrypt]
