@@ -8,6 +8,7 @@ for extracurricular activities at Mergington High School.
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
+from fastapi import Body
 
 from . import auth
 from . import payments
@@ -104,9 +105,24 @@ def root():
     return RedirectResponse(url="/static/index.html")
 
 
+@app.get("/admin")
+def admin_page(current_user: dict = Depends(auth.require_role("admin"))):
+    """Redirect authenticated admin users to the static admin UI"""
+    return RedirectResponse(url="/static/admin.html")
+
+
 @app.get("/activities")
 def get_activities():
     return activities
+
+
+@app.put("/activities/{activity_name}")
+def update_activity(activity_name: str, description: str = Body(...), current_user: dict = Depends(auth.require_role("admin"))):
+    """Update an activity's description (admin only). Expects JSON body: {"description": "..."} """
+    if activity_name not in activities:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    activities[activity_name]["description"] = description
+    return activities[activity_name]
 
 
 # Payments / Invoices endpoints (basic in-memory implementation)
